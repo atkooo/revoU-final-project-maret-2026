@@ -35,11 +35,20 @@ const themeManager = {
 
 const greetingWidget = {
   _container: null,
+  _name: '',
 
   init(containerEl) {
     this._container = containerEl;
+    this._name = localStorage.getItem('dashboard_name') || '';
     this.render();
     setInterval(() => this.render(), 60_000);
+  },
+
+  setName(value) {
+    const trimmed = value.trim();
+    this._name = trimmed;
+    localStorage.setItem('dashboard_name', this._name);
+    this.render();
   },
 
   render() {
@@ -64,11 +73,30 @@ const greetingWidget = {
       greeting = 'Good night';
     }
 
+    // Append name if set (Requirement 2.2)
+    const greetingText = this._name ? `${greeting}, ${this._name}` : greeting;
+
     this._container.innerHTML = `
-      <p class="greeting-text">${greeting}</p>
+      <p class="greeting-text">${greetingText}</p>
       <p class="greeting-time">${time}</p>
       <p class="greeting-date">${date}</p>
+      <form class="name-form">
+        <input class="name-input" type="text" placeholder="Your name…" aria-label="Display name" value="${this._escHtml(this._name)}" />
+        <button class="name-save-btn" type="submit">Save</button>
+      </form>
     `;
+
+    // Wire form submit
+    const form = this._container.querySelector('.name-form');
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const input = form.querySelector('.name-input');
+      this.setName(input.value);
+    });
+  },
+
+  _escHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   },
 };
 
@@ -76,10 +104,20 @@ const greetingWidget = {
 
 const timerWidget = {
   _container: null,
+  _duration: 25, // minutes (Requirement 3.6 default)
   _state: { remaining: 1500, running: false, intervalId: null },
 
   init(containerEl) {
     this._container = containerEl;
+    // Task 3.3: read persisted duration from localStorage
+    const stored = localStorage.getItem('dashboard_timer_duration');
+    if (stored !== null) {
+      const parsed = parseInt(stored, 10);
+      if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 99) {
+        this._duration = parsed;
+      }
+    }
+    this._state.remaining = this._duration * 60;
     this.render();
   },
 
@@ -103,17 +141,34 @@ const timerWidget = {
     this.render();
   },
 
+  // Task 3.4: reset to _duration * 60 instead of hard-coded 1500
   reset() {
     this.stop();
-    this._state.remaining = 1500;
+    this._state.remaining = this._duration * 60;
     this.render();
   },
 
+  // Task 3.2: validate 1–99, persist, reset countdown
+  setDuration(value) {
+    const parsed = parseInt(value, 10);
+    const errorEl = this._container.querySelector('.timer-duration-error');
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 99) {
+      if (errorEl) errorEl.textContent = 'Please enter a whole number between 1 and 99.';
+      return;
+    }
+    this._duration = parsed;
+    localStorage.setItem('dashboard_timer_duration', this._duration);
+    if (errorEl) errorEl.textContent = '';
+    this.reset();
+  },
+
   render() {
-    const { remaining } = this._state;
+    const { remaining, running } = this._state;
     const minutes = Math.floor(remaining / 60).toString().padStart(2, '0');
     const seconds = (remaining % 60).toString().padStart(2, '0');
     const display = `${minutes}:${seconds}`; // MM:SS format (Requirement 2.2)
+    // Task 3.5: disable input/button while running
+    const disabledAttr = running ? ' disabled' : '';
 
     this._container.innerHTML = `
       <p class="timer-display">${display}</p>
@@ -122,11 +177,25 @@ const timerWidget = {
         <button class="timer-btn" id="timer-stop">Stop</button>
         <button class="timer-btn" id="timer-reset">Reset</button>
       </div>
+      <div class="timer-duration-row">
+        <input class="timer-duration-input" type="number" min="1" max="99"
+               aria-label="Timer duration in minutes" value="${this._duration}"${disabledAttr} />
+        <button class="timer-set-btn"${disabledAttr}>Set</button>
+        <span class="timer-duration-error" role="alert" aria-live="polite"></span>
+      </div>
     `;
 
     this._container.querySelector('#timer-start').addEventListener('click', () => this.start());
     this._container.querySelector('#timer-stop').addEventListener('click', () => this.stop());
     this._container.querySelector('#timer-reset').addEventListener('click', () => this.reset());
+
+    // Task 3.1: wire Set button
+    const setBtn = this._container.querySelector('.timer-set-btn');
+    const durationInput = this._container.querySelector('.timer-duration-input');
+    setBtn.addEventListener('click', () => this.setDuration(durationInput.value));
+    durationInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.setDuration(durationInput.value);
+    });
   },
 };
 
@@ -137,6 +206,8 @@ const todoWidget = {
   _container: null,
   _tasks: [], // Task[]
   _editingId: null, // id of task currently being edited
+  _error: '',
+  _sortOrder: 'added', // 'added' | 'alpha-asc' | 'alpha-desc'
 
   init(containerEl) {
     this._container = containerEl;
@@ -145,6 +216,11 @@ const todoWidget = {
       this._tasks = stored ? JSON.parse(stored) : [];
     } catch {
       this._tasks = [];
+    }
+    // Task 5.4: load persisted sort order
+    const storedSort = localStorage.getItem('dashboard_sort_order');
+    if (storedSort === 'alpha-asc' || storedSort === 'alpha-desc' || storedSort === 'added') {
+      this._sortOrder = storedSort;
     }
     this.render();
   },
@@ -160,6 +236,15 @@ const todoWidget = {
       // Retain focus on input (Requirement 3.3)
       const input = this._container.querySelector('.todo-input');
       if (input) input.focus();
+      return;
+    }
+    // Task 4.2: duplicate check (case-insensitive)
+    const isDuplicate = this._tasks.some(
+      t => t.title.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      this._error = 'A task with that name already exists.';
+      this.render();
       return;
     }
     this._tasks.push({ id: crypto.randomUUID(), title: trimmed, done: false });
@@ -188,6 +273,16 @@ const todoWidget = {
       this.render();
       return;
     }
+    // Task 4.3: duplicate check excluding self (case-insensitive)
+    const isDuplicate = this._tasks.some(
+      t => t.id !== id && t.title.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      this._editingId = null;
+      this._error = 'A task with that name already exists.';
+      this.render();
+      return;
+    }
     task.title = trimmed;
     this._editingId = null;
     this._persist();
@@ -207,8 +302,14 @@ const todoWidget = {
         <input class="todo-input" type="text" placeholder="New task…" aria-label="New task title" />
         <button class="todo-add-btn">Add</button>
       </div>
+      <p class="todo-error" role="alert" aria-live="polite">${this._escHtml(this._error)}</p>
+      <select class="todo-sort-select" aria-label="Sort tasks">
+        <option value="added"${this._sortOrder === 'added' ? ' selected' : ''}>Order added</option>
+        <option value="alpha-asc"${this._sortOrder === 'alpha-asc' ? ' selected' : ''}>A → Z</option>
+        <option value="alpha-desc"${this._sortOrder === 'alpha-desc' ? ' selected' : ''}>Z → A</option>
+      </select>
       <ul class="todo-list">
-        ${this._tasks.map(task => this._renderTask(task)).join('')}
+        ${this._getSortedTasks().map(task => this._renderTask(task)).join('')}
       </ul>
     `;
 
@@ -226,6 +327,23 @@ const todoWidget = {
         this.addTask(input.value);
         input.value = '';
       }
+    });
+
+    // Task 4.4: clear error on input change (without full re-render)
+    input.addEventListener('input', () => {
+      if (this._error) {
+        this._error = '';
+        const errorEl = this._container.querySelector('.todo-error');
+        if (errorEl) errorEl.textContent = '';
+      }
+    });
+
+    // Task 5.5: wire sort select change
+    const sortSelect = this._container.querySelector('.todo-sort-select');
+    sortSelect.addEventListener('change', () => {
+      this._sortOrder = sortSelect.value;
+      localStorage.setItem('dashboard_sort_order', this._sortOrder);
+      this.render();
     });
 
     // Wire per-task controls
@@ -261,6 +379,16 @@ const todoWidget = {
         li.querySelector('.todo-delete-btn').addEventListener('click', () => this.deleteTask(task.id));
       }
     });
+  },
+
+  // Task 5.2: returns a sorted copy of _tasks based on _sortOrder
+  _getSortedTasks() {
+    const tasks = [...this._tasks];
+    if (this._sortOrder === 'alpha-asc')
+      return tasks.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    if (this._sortOrder === 'alpha-desc')
+      return tasks.sort((a, b) => b.title.localeCompare(a.title, undefined, { sensitivity: 'base' }));
+    return tasks; // 'added' — insertion order
   },
 
   _renderTask(task) {
