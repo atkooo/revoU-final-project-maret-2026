@@ -2,6 +2,8 @@
 
 A lightweight, single-page personal dashboard built with vanilla HTML, CSS, and JavaScript — no build step, no dependencies.
 
+**Live demo:** https://atkooo.github.io/revoU-final-project-maret-2026/
+
 ## Features
 
 - **Greeting Widget** — displays the current time, date, and a time-aware greeting (Good morning / afternoon / evening / night). Supports a custom display name that persists across sessions.
