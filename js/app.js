@@ -1,3 +1,36 @@
+// ─── Theme Manager ───────────────────────────────────────────────────────────
+
+const themeManager = {
+  _theme: 'dark',
+
+  init() {
+    const stored = localStorage.getItem('dashboard_theme');
+    this._theme = stored === 'light' ? 'light' : 'dark';
+    this._apply(this._theme);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.addEventListener('click', () => this.toggle());
+  },
+
+  toggle() {
+    this._theme = this._theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('dashboard_theme', this._theme);
+    this._apply(this._theme);
+  },
+
+  _apply(theme) {
+    document.body.dataset.theme = theme;
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    if (theme === 'dark') {
+      btn.textContent = '🌙';
+      btn.setAttribute('aria-label', 'Switch to light mode');
+    } else {
+      btn.textContent = '☀️';
+      btn.setAttribute('aria-label', 'Switch to dark mode');
+    }
+  },
+};
+
 // ─── Greeting Widget ────────────────────────────────────────────────────────
 
 const greetingWidget = {
@@ -374,6 +407,9 @@ const linksWidget = {
 };
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
+
+// Apply theme synchronously before DOMContentLoaded to avoid flash (Requirement 1.6)
+themeManager.init();
 
 document.addEventListener('DOMContentLoaded', () => {
   greetingWidget.init(document.getElementById('greeting-widget'));

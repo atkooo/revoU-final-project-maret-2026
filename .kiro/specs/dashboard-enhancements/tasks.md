@@ -2,15 +2,15 @@
 
 ## Tasks
 
-- [ ] 1. Add light/dark theme toggle
+- [x] 1. Add light/dark theme toggle
   - [x] 1.1 Add CSS custom-property overrides for `[data-theme="light"]` in `css/styles.css`
-  - [-] 1.2 Add `#theme-toggle` button to `index.html` (header/top bar area)
-  - [~] 1.3 Implement `themeManager` module in `js/app.js` with `init()`, `toggle()`, and `_apply()` methods
-  - [~] 1.4 Call `themeManager.init()` synchronously on page load (before widget bootstrap) to avoid theme flash
-  - [~] 1.5 Wire the toggle button to `themeManager.toggle()` and update its aria-label / icon on each switch
+  - [x] 1.2 Add `#theme-toggle` button to `index.html` (header/top bar area)
+  - [x] 1.3 Implement `themeManager` module in `js/app.js` with `init()`, `toggle()`, and `_apply()` methods
+  - [x] 1.4 Call `themeManager.init()` synchronously on page load (before widget bootstrap) to avoid theme flash
+  - [x] 1.5 Wire the toggle button to `themeManager.toggle()` and update its aria-label / icon on each switch
 
 - [ ] 2. Custom name in greeting
-  - [~] 2.1 Add a name input form inside `#greeting-widget` in `index.html`
+  - [-] 2.1 Add a name input form inside `#greeting-widget` in `index.html`
   - [~] 2.2 Add `_name` state and `setName(value)` method to `greetingWidget` in `js/app.js`
   - [~] 2.3 Update `greetingWidget.render()` to append the name to the greeting text when `_name` is non-empty
   - [~] 2.4 Persist and load `_name` via `localStorage` key `"dashboard_name"` in `init()` and `setName()`
