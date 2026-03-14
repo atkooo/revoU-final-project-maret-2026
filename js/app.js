@@ -1,0 +1,383 @@
+// ─── Greeting Widget ────────────────────────────────────────────────────────
+
+const greetingWidget = {
+  _container: null,
+
+  init(containerEl) {
+    this._container = containerEl;
+    this.render();
+    setInterval(() => this.render(), 60_000);
+  },
+
+  render() {
+    const now = new Date();
+    const hour = now.getHours();
+
+    // HH:MM (Requirements 1.1)
+    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+    // Human-readable date, e.g. "Monday, July 14, 2025" (Requirement 1.2)
+    const date = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Greeting based on hour (Requirements 1.3–1.6)
+    let greeting;
+    if (hour >= 5 && hour <= 11) {
+      greeting = 'Good morning';
+    } else if (hour >= 12 && hour <= 17) {
+      greeting = 'Good afternoon';
+    } else if (hour >= 18 && hour <= 21) {
+      greeting = 'Good evening';
+    } else {
+      greeting = 'Good night';
+    }
+
+    this._container.innerHTML = `
+      <p class="greeting-text">${greeting}</p>
+      <p class="greeting-time">${time}</p>
+      <p class="greeting-date">${date}</p>
+    `;
+  },
+};
+
+// ─── Focus Timer Widget ──────────────────────────────────────────────────────
+
+const timerWidget = {
+  _container: null,
+  _state: { remaining: 1500, running: false, intervalId: null },
+
+  init(containerEl) {
+    this._container = containerEl;
+    this.render();
+  },
+
+  start() {
+    if (this._state.running) return; // no-op if already running (Requirement 2.3)
+    this._state.running = true;
+    this._state.intervalId = setInterval(() => {
+      this._state.remaining -= 1;
+      this.render();
+      if (this._state.remaining <= 0) {
+        this.stop(); // auto-stop at 0 (Requirement 2.5)
+      }
+    }, 1000);
+    this.render();
+  },
+
+  stop() {
+    clearInterval(this._state.intervalId);
+    this._state.intervalId = null;
+    this._state.running = false;
+    this.render();
+  },
+
+  reset() {
+    this.stop();
+    this._state.remaining = 1500;
+    this.render();
+  },
+
+  render() {
+    const { remaining } = this._state;
+    const minutes = Math.floor(remaining / 60).toString().padStart(2, '0');
+    const seconds = (remaining % 60).toString().padStart(2, '0');
+    const display = `${minutes}:${seconds}`; // MM:SS format (Requirement 2.2)
+
+    this._container.innerHTML = `
+      <p class="timer-display">${display}</p>
+      <div class="timer-controls">
+        <button class="timer-btn" id="timer-start">Start</button>
+        <button class="timer-btn" id="timer-stop">Stop</button>
+        <button class="timer-btn" id="timer-reset">Reset</button>
+      </div>
+    `;
+
+    this._container.querySelector('#timer-start').addEventListener('click', () => this.start());
+    this._container.querySelector('#timer-stop').addEventListener('click', () => this.stop());
+    this._container.querySelector('#timer-reset').addEventListener('click', () => this.reset());
+  },
+};
+
+
+// ─── To-Do List Widget ───────────────────────────────────────────────────────
+
+const todoWidget = {
+  _container: null,
+  _tasks: [], // Task[]
+  _editingId: null, // id of task currently being edited
+
+  init(containerEl) {
+    this._container = containerEl;
+    try {
+      const stored = localStorage.getItem('dashboard_todos');
+      this._tasks = stored ? JSON.parse(stored) : [];
+    } catch {
+      this._tasks = [];
+    }
+    this.render();
+  },
+
+  _persist() {
+    localStorage.setItem('dashboard_todos', JSON.stringify(this._tasks));
+  },
+
+  // Requirement 3.2, 3.3
+  addTask(title) {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      // Retain focus on input (Requirement 3.3)
+      const input = this._container.querySelector('.todo-input');
+      if (input) input.focus();
+      return;
+    }
+    this._tasks.push({ id: crypto.randomUUID(), title: trimmed, done: false });
+    this._persist();
+    this.render();
+  },
+
+  // Requirement 4.4, 4.5
+  toggleTask(id) {
+    const task = this._tasks.find(t => t.id === id);
+    if (task) {
+      task.done = !task.done;
+      this._persist();
+      this.render();
+    }
+  },
+
+  // Requirement 4.1, 4.2, 4.3
+  editTask(id, title) {
+    const trimmed = title.trim();
+    const task = this._tasks.find(t => t.id === id);
+    if (!task) return;
+    if (!trimmed) {
+      // Discard edit, restore original (Requirement 4.3)
+      this._editingId = null;
+      this.render();
+      return;
+    }
+    task.title = trimmed;
+    this._editingId = null;
+    this._persist();
+    this.render();
+  },
+
+  // Requirement 4.6
+  deleteTask(id) {
+    this._tasks = this._tasks.filter(t => t.id !== id);
+    this._persist();
+    this.render();
+  },
+
+  render() {
+    this._container.innerHTML = `
+      <div class="todo-add-row">
+        <input class="todo-input" type="text" placeholder="New task…" aria-label="New task title" />
+        <button class="todo-add-btn">Add</button>
+      </div>
+      <ul class="todo-list">
+        ${this._tasks.map(task => this._renderTask(task)).join('')}
+      </ul>
+    `;
+
+    // Wire add controls
+    const input = this._container.querySelector('.todo-input');
+    const addBtn = this._container.querySelector('.todo-add-btn');
+
+    addBtn.addEventListener('click', () => {
+      this.addTask(input.value);
+      input.value = '';
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        this.addTask(input.value);
+        input.value = '';
+      }
+    });
+
+    // Wire per-task controls
+    this._tasks.forEach(task => {
+      const li = this._container.querySelector(`[data-id="${task.id}"]`);
+      if (!li) return;
+
+      if (this._editingId === task.id) {
+        // Inline edit mode
+        const editInput = li.querySelector('.todo-edit-input');
+        const saveBtn = li.querySelector('.todo-save-btn');
+        const cancelBtn = li.querySelector('.todo-cancel-btn');
+
+        editInput.focus();
+        editInput.select();
+
+        const save = () => this.editTask(task.id, editInput.value);
+        const cancel = () => { this._editingId = null; this.render(); };
+
+        saveBtn.addEventListener('click', save);
+        cancelBtn.addEventListener('click', cancel);
+        editInput.addEventListener('keydown', e => {
+          if (e.key === 'Enter') save();
+          if (e.key === 'Escape') cancel();
+        });
+      } else {
+        // Normal mode
+        li.querySelector('.todo-toggle').addEventListener('click', () => this.toggleTask(task.id));
+        li.querySelector('.todo-edit-btn').addEventListener('click', () => {
+          this._editingId = task.id;
+          this.render();
+        });
+        li.querySelector('.todo-delete-btn').addEventListener('click', () => this.deleteTask(task.id));
+      }
+    });
+  },
+
+  _renderTask(task) {
+    if (this._editingId === task.id) {
+      return `
+        <li class="todo-item todo-item--editing" data-id="${task.id}">
+          <input class="todo-edit-input" type="text" value="${this._escHtml(task.title)}" aria-label="Edit task title" />
+          <button class="todo-save-btn">Save</button>
+          <button class="todo-cancel-btn">Cancel</button>
+        </li>
+      `;
+    }
+    const doneClass = task.done ? ' todo-item--done' : '';
+    const titleHtml = task.done
+      ? `<s class="todo-title">${this._escHtml(task.title)}</s>`
+      : `<span class="todo-title">${this._escHtml(task.title)}</span>`;
+    return `
+      <li class="todo-item${doneClass}" data-id="${task.id}">
+        <button class="todo-toggle" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}">${task.done ? '✓' : '○'}</button>
+        ${titleHtml}
+        <button class="todo-edit-btn" aria-label="Edit task">✎</button>
+        <button class="todo-delete-btn" aria-label="Delete task">✕</button>
+      </li>
+    `;
+  },
+
+  _escHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+};
+
+
+// ─── Quick Links Widget ──────────────────────────────────────────────────────
+
+const linksWidget = {
+  _container: null,
+  _links: [], // Link[]
+
+  init(containerEl) {
+    this._container = containerEl;
+    try {
+      const stored = localStorage.getItem('dashboard_links');
+      this._links = stored ? JSON.parse(stored) : [];
+    } catch {
+      this._links = [];
+    }
+    this.render();
+  },
+
+  _persist() {
+    localStorage.setItem('dashboard_links', JSON.stringify(this._links));
+  },
+
+  // Requirements 7.2, 7.3
+  addLink(label, url) {
+    const trimmedLabel = label.trim();
+    const trimmedUrl = url.trim();
+
+    if (!trimmedLabel) {
+      this._showError('Label cannot be empty.');
+      return;
+    }
+
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      this._showError('Please enter a valid URL (e.g. https://example.com).');
+      return;
+    }
+
+    this._links.push({
+      id: crypto.randomUUID(),
+      label: trimmedLabel,
+      url: trimmedUrl,
+    });
+    this._persist();
+    this._showError('');
+    this.render();
+  },
+
+  // Requirement 7.4
+  deleteLink(id) {
+    this._links = this._links.filter(l => l.id !== id);
+    this._persist();
+    this.render();
+  },
+
+  _showError(message) {
+    const errorEl = this._container.querySelector('.links-error');
+    if (errorEl) errorEl.textContent = message;
+  },
+
+  // Requirements 6.1, 6.2, 7.1
+  render() {
+    this._container.innerHTML = `
+      <div class="links-add-row">
+        <input class="links-label-input" type="text" placeholder="Label" aria-label="Link label" />
+        <input class="links-url-input" type="url" placeholder="https://example.com" aria-label="Link URL" />
+        <button class="links-add-btn">Add</button>
+      </div>
+      <p class="links-error" role="alert" aria-live="polite"></p>
+      <ul class="links-list">
+        ${this._links.map(link => this._renderLink(link)).join('')}
+      </ul>
+    `;
+
+    const labelInput = this._container.querySelector('.links-label-input');
+    const urlInput = this._container.querySelector('.links-url-input');
+    const addBtn = this._container.querySelector('.links-add-btn');
+
+    const submit = () => {
+      this.addLink(labelInput.value, urlInput.value);
+      // Only clear inputs on success (no error message means success)
+      const errorEl = this._container.querySelector('.links-error');
+      if (errorEl && !errorEl.textContent) {
+        labelInput.value = '';
+        urlInput.value = '';
+      }
+    };
+
+    addBtn.addEventListener('click', submit);
+    urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+
+    // Wire delete buttons
+    this._links.forEach(link => {
+      const li = this._container.querySelector(`[data-id="${link.id}"]`);
+      if (!li) return;
+      li.querySelector('.links-delete-btn').addEventListener('click', () => this.deleteLink(link.id));
+    });
+  },
+
+  _renderLink(link) {
+    return `
+      <li class="links-item" data-id="${link.id}">
+        <a class="links-anchor" href="${this._escHtml(link.url)}" target="_blank" rel="noopener noreferrer">${this._escHtml(link.label)}</a>
+        <button class="links-delete-btn" aria-label="Delete link">✕</button>
+      </li>
+    `;
+  },
+
+  _escHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+};
+
+// ─── Bootstrap ───────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  greetingWidget.init(document.getElementById('greeting-widget'));
+  timerWidget.init(document.getElementById('timer-widget'));
+  todoWidget.init(document.getElementById('todo-widget'));
+  linksWidget.init(document.getElementById('links-widget'));
+});
